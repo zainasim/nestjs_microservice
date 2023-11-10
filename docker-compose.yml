@@ -1,0 +1,109 @@
+version: "3"
+
+networks:
+  app-net:
+    driver: bridge
+
+services:
+  postgres:
+    container_name: nestjs-postgres
+    image: postgres:latest
+    ports:
+      - "5432:5432"
+    volumes:
+      - /data/postgres:/data/postgres
+    env_file:
+      - docker.env
+    networks:
+      - app-net
+ 
+  pgadmin:
+    links:
+      - postgres:postgres
+    container_name: nestjs-pgadmin
+    image: dpage/pgadmin4
+    ports:
+      - "8080:80"
+    volumes:
+      - /data/pgadmin:/root/.pgadmin
+    env_file:
+      - docker.env
+    networks:
+      - app-net
+
+  order-service:
+    container_name: order-service
+    build:
+      context: .
+      dockerfile: ./apps/order-service/Dockerfile.development
+    ports:
+      - 3003:3003 # set according to your project setup
+    volumes:
+      - ./apps/order-service:/usr/src/app/apps/order-service
+      - ./libs:/usr/src/app/libs
+    env_file: ./apps/order-service/.env
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - app-net
+
+  product-service:
+    container_name: product-service
+    build:
+      context: .
+      dockerfile: ./apps/product-service/Dockerfile.development
+    ports:
+      - 3002:3002 # set according to your project setup
+    volumes:
+      - ./apps/product-service:/usr/src/app/apps/product-service
+      - ./libs:/usr/src/app/libs
+    env_file: ./apps/product-service/.env
+    depends_on:
+      - postgres
+      - order-service
+    networks:
+      - app-net
+
+  user-service:
+    container_name: user-service
+    build:
+      context: .
+      dockerfile: ./apps/user-service/Dockerfile.development
+    ports:
+      - 3001:3001 # set according to your project setup
+    volumes:
+      - ./apps/user-service:/usr/src/app/apps/user-service
+      - ./libs:/usr/src/app/libs
+    env_file: ./apps/user-service/.env
+    depends_on:
+      - postgres
+    networks:
+      - app-net
+
+  zookeeper:
+    image: 'docker.io/bitnami/zookeeper:3-debian-10'
+    ports:
+      - 2181:2181
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - app-net
+
+  kafka:
+    image: 'docker.io/bitnami/kafka:2-debian-10'
+    ports:
+      - 9092:9092
+      - 9093:9093
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka:9092,EXTERNAL://kafka:9093
+      - KAFKA_INTER_BROKER_LISTENER_NAME=CLIENT
+    depends_on:
+      - zookeeper
+    networks:
+      - app-net
