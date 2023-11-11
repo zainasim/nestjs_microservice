@@ -11,6 +11,9 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+  
+  await app.startAllMicroservices();
+
   await app.listen(3001);
 }
 bootstrap();
